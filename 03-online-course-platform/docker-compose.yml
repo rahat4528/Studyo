@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  course-postgres:
+    image: postgres:16-alpine
+    container_name: studyo_course_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studyo_user
+      POSTGRES_PASSWORD: studyo_secure_password
+      POSTGRES_DB: studyo_online_course_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - course_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyo_user -d studyo_online_course_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  course-redis:
+    image: redis:7-alpine
+    container_name: studyo_course_redis
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+    volumes:
+      - course_redisdata:/data
+
+  course-minio:
+    image: minio/minio:latest
+    container_name: studyo_course_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_secure_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - course_miniodata:/data
+
+  course-mailpit:
+    image: axllent/mailpit:latest
+    container_name: studyo_course_mailpit
+    restart: unless-stopped
+    ports:
+      - "8027:8025"
+      - "1027:1025"
+
+volumes:
+  course_pgdata:
+  course_redisdata:
+  course_miniodata:
