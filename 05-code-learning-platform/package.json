@@ -1,0 +1,13 @@
+{
+  "name": "05-code-learning-platform",
+  "version": "1.0.0",
+  "description": "Code Learning Platform - Interactive programming curriculum with sandboxed container execution, zero-leak test evaluation, algorithm visualizer, and certifications",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "test:backend": "cd backend && npm test",
+    "build:backend": "cd backend && npm run build",
+    "seed": "cd backend && npm run seed"
+  }
+}

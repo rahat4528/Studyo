@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: studyo_code_learning_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: studyo_code_learning_db
+      POSTGRES_USER: studyo_code_user
+      POSTGRES_PASSWORD: studyo_code_password_secure_2026
+    ports:
+      - "5436:5432"
+    volumes:
+      - code_learning_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyo_code_user -d studyo_code_learning_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: studyo_code_learning_redis
+    restart: unless-stopped
+    ports:
+      - "6382:6379"
+    volumes:
+      - code_learning_redisdata:/data
+
+  execution-worker:
+    build:
+      context: ./execution-service
+      dockerfile: Dockerfile
+    container_name: studyo_execution_worker
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      WORKER_CONCURRENCY: 4
+      SANDBOX_TIMEOUT_SEC: 5
+      SANDBOX_MEMORY_MB: 128
+    depends_on:
+      - redis
+
+volumes:
+  code_learning_pgdata:
+  code_learning_redisdata:
