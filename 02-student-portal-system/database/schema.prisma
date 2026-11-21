@@ -1,0 +1,312 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  FACULTY
+  ADMINISTRATOR
+  GUARDIAN
+}
+
+enum EnrollmentStatus {
+  REQUESTED
+  ENROLLED
+  DROPPED
+  WITHDRAWN
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ExamResultStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PUBLISHED
+}
+
+enum HoldType {
+  FINANCIAL_HOLD
+  ACADEMIC_SUSPENSION
+  DISCIPLINARY
+  REGISTRATION_BLOCK
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  fullName     String
+  role         Role          @default(STUDENT)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  student      Student?
+  faculty      Faculty?
+  guardian     Guardian?
+  auditLogs    AuditLog[]
+}
+
+model Department {
+  id          String     @id @default(uuid())
+  code        String     @unique
+  name        String
+  programs    Program[]
+  courses     Course[]
+  faculty     Faculty[]
+}
+
+model Program {
+  id             String      @id @default(uuid())
+  departmentId   String
+  department     Department  @relation(fields: [departmentId], references: [id])
+  code           String      @unique
+  name           String
+  totalCredits   Float       @default(120.0)
+  students       Student[]
+  feeStructures  FeeStructure[]
+}
+
+model Student {
+  id              String             @id @default(uuid())
+  userId          String             @unique
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentIdNumber String             @unique
+  programId       String
+  program         Program            @relation(fields: [programId], references: [id])
+  enrollments     Enrollment[]
+  attendances     Attendance[]
+  grades          Grade[]
+  transcripts     Transcript[]
+  fees            StudentFee[]
+  payments        PaymentRecord[]
+  leaveApps       LeaveApplication[]
+  holds           Hold[]
+  guardianLinks   GuardianLink[]
+}
+
+model Faculty {
+  id           String          @id @default(uuid())
+  userId       String          @unique
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeId   String          @unique
+  departmentId String
+  department   Department      @relation(fields: [departmentId], references: [id])
+  sections     CourseSection[]
+}
+
+model Guardian {
+  id           String         @id @default(uuid())
+  userId       String         @unique
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relationship String
+  studentLinks GuardianLink[]
+}
+
+model GuardianLink {
+  id          String   @id @default(uuid())
+  guardianId  String
+  guardian    Guardian @relation(fields: [guardianId], references: [id])
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  isApproved  Boolean  @default(false)
+  approvedAt  DateTime?
+
+  @@unique([guardianId, studentId])
+}
+
+model Semester {
+  id              String          @id @default(uuid())
+  name            String          @unique // e.g. Fall 2026
+  startDate       DateTime
+  endDate         DateTime
+  regStartDate    DateTime
+  regEndDate      DateTime
+  isActive        Boolean         @default(false)
+  sections        CourseSection[]
+  enrollments     Enrollment[]
+  examinations    Examination[]
+}
+
+model Course {
+  id             String          @id @default(uuid())
+  departmentId   String
+  department     Department      @relation(fields: [departmentId], references: [id])
+  code           String          @unique // e.g. CS101
+  title          String
+  credits        Float           @default(3.0)
+  prerequisiteId String?
+  prerequisite   Course?         @relation("CoursePrerequisites", fields: [prerequisiteId], references: [id])
+  prereqFor      Course[]        @relation("CoursePrerequisites")
+  sections       CourseSection[]
+}
+
+model CourseSection {
+  id           String          @id @default(uuid())
+  courseId     String
+  course       Course          @relation(fields: [courseId], references: [id])
+  semesterId   String
+  semester     Semester        @relation(fields: [semesterId], references: [id])
+  facultyId    String
+  faculty      Faculty         @relation(fields: [facultyId], references: [id])
+  sectionCode  String          // e.g. "Section 01"
+  capacity     Int             @default(30)
+  enrolled     Int             @default(0)
+  schedules    ClassSchedule[]
+  enrollments  Enrollment[]
+  attendances  Attendance[]
+  examinations Examination[]
+
+  @@unique([courseId, semesterId, sectionCode])
+}
+
+model ClassSchedule {
+  id          String        @id @default(uuid())
+  sectionId   String
+  section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  dayOfWeek   String        // MONDAY, TUESDAY, etc.
+  startTime   String        // "09:00"
+  endTime     String        // "10:30"
+  room        String
+}
+
+model Enrollment {
+  id          String           @id @default(uuid())
+  studentId   String
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sectionId   String
+  section     CourseSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  semesterId  String
+  semester    Semester         @relation(fields: [semesterId], references: [id])
+  status      EnrollmentStatus @default(ENROLLED)
+  enrolledAt  DateTime         @default(now())
+
+  @@unique([studentId, sectionId])
+}
+
+model Attendance {
+  id          String           @id @default(uuid())
+  sectionId   String
+  section     CourseSection    @relation(fields: [sectionId], references: [id])
+  studentId   String
+  student     Student          @relation(fields: [studentId], references: [id])
+  date        String           // YYYY-MM-DD
+  status      AttendanceStatus @default(PRESENT)
+  markedById  String
+  markedAt    DateTime         @default(now())
+
+  @@unique([sectionId, studentId, date])
+}
+
+model Examination {
+  id           String           @id @default(uuid())
+  sectionId    String
+  section      CourseSection    @relation(fields: [sectionId], references: [id])
+  semesterId   String
+  semester     Semester         @relation(fields: [semesterId], references: [id])
+  name         String           // Midterm, Final
+  maxMarks     Float            @default(100.0)
+  weight       Float            @default(1.0)
+  status       ExamResultStatus @default(DRAFT)
+  grades       Grade[]
+}
+
+model Grade {
+  id             String      @id @default(uuid())
+  examinationId  String
+  examination    Examination @relation(fields: [examinationId], references: [id])
+  studentId      String
+  student        Student     @relation(fields: [studentId], references: [id])
+  rawMarks       Float
+  letter         String
+  gradePoints    Float
+  isRepeat       Boolean     @default(false)
+  updatedAt      DateTime    @updatedAt
+}
+
+model Transcript {
+  id               String   @id @default(uuid())
+  studentId        String
+  student          Student  @relation(fields: [studentId], references: [id])
+  verificationCode String   @unique
+  gpa              Float
+  cgpa             Float
+  totalCreditsEarned Float
+  isSealed         Boolean  @default(true)
+  issuedAt         DateTime @default(now())
+}
+
+model FeeStructure {
+  id          String   @id @default(uuid())
+  programId   String
+  program     Program  @relation(fields: [programId], references: [id])
+  name        String   // Tuition, Lab Fee
+  amount      Float
+}
+
+model StudentFee {
+  id             String          @id @default(uuid())
+  studentId      String
+  student        Student         @relation(fields: [studentId], references: [id])
+  semesterId     String
+  feeName        String
+  amountDue      Float
+  amountPaid     Float           @default(0.0)
+  isCleared      Boolean         @default(false)
+  payments       PaymentRecord[]
+}
+
+model PaymentRecord {
+  id             String     @id @default(uuid())
+  studentFeeId   String
+  studentFee     StudentFee @relation(fields: [studentFeeId], references: [id])
+  studentId      String
+  student        Student    @relation(fields: [studentId], references: [id])
+  amount         Float
+  paymentMethod  String     // ONLINE_MOCK, BANK_TRANSFER, CASH
+  isReversal     Boolean    @default(false)
+  reversalReason String?
+  createdAt      DateTime   @default(now())
+}
+
+model Hold {
+  id          String   @id @default(uuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  type        HoldType
+  reason      String
+  isActive    Boolean  @default(true)
+  placedAt    DateTime @default(now())
+}
+
+model LeaveApplication {
+  id          String   @id @default(uuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  startDate   String
+  endDate     String
+  reason      String
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedAt  DateTime?
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  details    String
+  timestamp  DateTime @default(now())
+}

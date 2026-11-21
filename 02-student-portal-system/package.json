@@ -1,0 +1,10 @@
+{
+  "name": "02-student-portal-system",
+  "version": "1.0.0",
+  "description": "Standalone Student Portal & Academic Administration System for Studyo",
+  "scripts": {
+    "test": "cd backend && npm test",
+    "build": "cd backend && npm run build",
+    "seed": "cd backend && npm run seed"
+  }
+}

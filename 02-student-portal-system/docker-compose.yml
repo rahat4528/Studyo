@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  portal-postgres:
+    image: postgres:16-alpine
+    container_name: studyo_portal_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studyo_user
+      POSTGRES_PASSWORD: studyo_secure_password
+      POSTGRES_DB: studyo_student_portal_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - portal_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyo_user -d studyo_student_portal_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  portal-redis:
+    image: redis:7-alpine
+    container_name: studyo_portal_redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - portal_redisdata:/data
+
+  portal-mailpit:
+    image: axllent/mailpit:latest
+    container_name: studyo_portal_mailpit
+    restart: unless-stopped
+    ports:
+      - "8026:8025"
+      - "1026:1025"
+
+volumes:
+  portal_pgdata:
+  portal_redisdata:
