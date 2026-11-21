@@ -1,0 +1,10 @@
+{
+  "name": "01-quiz-application",
+  "version": "1.0.0",
+  "description": "Standalone Quiz and Assessment Application for Studyo",
+  "scripts": {
+    "test": "cd backend && npm test",
+    "build": "cd backend && npm run build",
+    "seed": "cd backend && npm run seed"
+  }
+}

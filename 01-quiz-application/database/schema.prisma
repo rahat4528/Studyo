@@ -1,0 +1,272 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  MULTIPLE_SELECT
+  TRUE_FALSE
+  SHORT_ANSWER
+  FILL_IN_THE_BLANKS
+  MATCHING
+  ESSAY
+}
+
+enum AttemptStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_GRADED
+  PENDING_MANUAL
+  FINALIZED
+  EXPIRED
+}
+
+enum ReleasePolicy {
+  IMMEDIATE
+  AFTER_CLOSE_DATE
+  NEVER
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  passwordHash   String
+  fullName       String
+  role           Role            @default(STUDENT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  attempts       QuizAttempt[]
+  certificates   Certificate[]
+  gradeRevisions GradeRevision[]
+}
+
+model StudentProfile {
+  id             String        @id @default(uuid())
+  userId         String        @unique
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentIdNumber String       @unique
+  enrolledAt     DateTime      @default(now())
+}
+
+model TeacherProfile {
+  id             String        @id @default(uuid())
+  userId         String        @unique
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department     String
+  bio            String?
+}
+
+model QuizCategory {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  quizzes     Quiz[]
+  questions   Question[]
+}
+
+model Quiz {
+  id                  String         @id @default(uuid())
+  title               String
+  slug                String         @unique
+  description         String?
+  categoryId          String
+  category            QuizCategory   @relation(fields: [categoryId], references: [id])
+  createdById         String
+  difficulty          String         @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED
+  timeLimitMinutes    Int            @default(30) // 0 for untimed
+  maxAttempts         Int            @default(1) // 0 for unlimited practice
+  passScorePercentage Float          @default(60.0)
+  isPractice          Boolean        @default(false)
+  isPublished         Boolean        @default(false)
+  randomizeQuestions  Boolean        @default(false)
+  randomizeOptions    Boolean        @default(false)
+  enableNegativeMarks Boolean        @default(false)
+  negativeMarkPenalty Float          @default(0.0)
+  zeroScoreFloor      Boolean        @default(true)
+  releasePolicy       ReleasePolicy  @default(IMMEDIATE)
+  showCorrectAnswers  Boolean        @default(true)
+  startsAt            DateTime?
+  endsAt              DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  questions           QuizQuestion[]
+  attempts            QuizAttempt[]
+  assignments         Assignment[]
+  schedules           QuizSchedule[]
+}
+
+model Question {
+  id             String         @id @default(uuid())
+  categoryId     String
+  category       QuizCategory   @relation(fields: [categoryId], references: [id])
+  createdById    String
+  title          String
+  prompt         String
+  type           QuestionType
+  points         Float          @default(1.0)
+  penalty        Float          @default(0.0)
+  explanation    String?
+  options        QuestionOption[]
+  acceptedAnswers Json?          // List of strings or normalized values for short answer & fill-in-blanks
+  matchingPairs  Json?          // List of { prompt: string, response: string }
+  rubricCriteria Json?          // Array of criteria items for essays
+  toleranceDelta Float?         // For numeric answers
+  poolId         String?
+  pool           QuestionPool?  @relation(fields: [poolId], references: [id])
+  quizQuestions  QuizQuestion[]
+  answers        AttemptAnswer[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model QuestionOption {
+  id          String    @id @default(uuid())
+  questionId  String
+  question    Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  label       String
+  isCorrect   Boolean   @default(false)
+  orderIndex  Int       @default(0)
+}
+
+model QuizQuestion {
+  id         String   @id @default(uuid())
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  orderIndex Int      @default(0)
+
+  @@unique([quizId, questionId])
+}
+
+model QuestionPool {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  questions   Question[]
+}
+
+model QuizAttempt {
+  id              String         @id @default(uuid())
+  quizId          String
+  quiz            Quiz           @relation(fields: [quizId], references: [id])
+  userId          String
+  user            User           @relation(fields: [userId], references: [id])
+  attemptNumber   Int            @default(1)
+  status          AttemptStatus  @default(NOT_STARTED)
+  randomSeed      Int            @default(12345)
+  startedAt       DateTime       @default(now())
+  deadline        DateTime
+  submittedAt     DateTime?
+  totalPointsEarned Float        @default(0.0)
+  totalPointsPossible Float      @default(0.0)
+  scorePercentage Float          @default(0.0)
+  passed          Boolean        @default(false)
+  answers         AttemptAnswer[]
+  grades          Grade[]
+  certificate     Certificate?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([quizId, userId, attemptNumber])
+}
+
+model AttemptAnswer {
+  id                String       @id @default(uuid())
+  attemptId         String
+  attempt           QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          Question     @relation(fields: [questionId], references: [id])
+  selectedOptionIds Json?        // String[] for multiple choice / select
+  textAnswer        String?      // String for short answer or essay
+  blankAnswers      Json?        // Record<string, string> for fill-in-blanks
+  matchedPairs      Json?        // Record<string, string> for matching
+  pointsAwarded     Float        @default(0.0)
+  isAutoGraded      Boolean      @default(false)
+  isManuallyGraded  Boolean      @default(false)
+  feedback          String?
+  version           Int          @default(1)
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([attemptId, questionId])
+}
+
+model Grade {
+  id              String          @id @default(uuid())
+  attemptId       String
+  attempt         QuizAttempt     @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  rawScore        Float
+  percentage      Float
+  letter          String?
+  feedback        String?
+  revisions       GradeRevision[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model GradeRevision {
+  id              String   @id @default(uuid())
+  gradeId         String
+  grade           Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  changedById     String
+  changedBy       User     @relation(fields: [changedById], references: [id])
+  previousScore   Float
+  newScore        Float
+  reason          String
+  createdAt       DateTime @default(now())
+}
+
+model ClassGroup {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  assignments Assignment[]
+}
+
+model Assignment {
+  id           String      @id @default(uuid())
+  quizId       String
+  quiz         Quiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  classGroupId String
+  classGroup   ClassGroup  @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
+  dueDate      DateTime
+  createdAt    DateTime    @default(now())
+}
+
+model QuizSchedule {
+  id          String   @id @default(uuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  timeZone    String   @default("UTC")
+}
+
+model Certificate {
+  id               String       @id @default(uuid())
+  attemptId        String       @unique
+  attempt          QuizAttempt  @relation(fields: [attemptId], references: [id])
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  recipientName    String
+  quizTitle        String
+  scorePercentage  Float
+  verificationCode String       @unique
+  issuedAt         DateTime     @default(now())
+  isRevoked        Boolean      @default(false)
+  revokedReason    String?
+}

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  quiz-postgres:
+    image: postgres:16-alpine
+    container_name: studyo_quiz_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studyo_user
+      POSTGRES_PASSWORD: studyo_secure_password
+      POSTGRES_DB: studyo_quiz_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - quiz_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyo_user -d studyo_quiz_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  quiz-redis:
+    image: redis:7-alpine
+    container_name: studyo_quiz_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - quiz_redisdata:/data
+
+  quiz-mailpit:
+    image: axllent/mailpit:latest
+    container_name: studyo_quiz_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  quiz_pgdata:
+  quiz_redisdata:
