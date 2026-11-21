@@ -1,0 +1,13 @@
+{
+  "name": "04-lms-platform-udemy-clone",
+  "version": "1.0.0",
+  "description": "LMS Platform (Udemy Clone) - Multi-instructor learning marketplace with DRM video player, multi-course cart, coupons, and verifiable certificates",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "test:backend": "cd backend && npm test",
+    "build:backend": "cd backend && npm run build",
+    "seed": "cd backend && npm run seed"
+  }
+}
